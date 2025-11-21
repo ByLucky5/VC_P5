@@ -269,3 +269,6 @@ frame = superponer_imagen(frame, peluca_scaled, eyes_center_x, eyes_center_y, an
 
 ## Resultado
 
+https://github.com/user-attachments/assets/41b6581a-09c8-45d2-aa9e-633e9dff05b8
+
+
