@@ -19,7 +19,7 @@ Este proyecto implementa un **sistema de detección de emociones faciales en tie
 
 ```bash
 ├── data/
-│   ├── filters/                  # PNGs de filtros con fondo transparente
+│   ├── filters/              # PNGs de filtros con fondo transparente
 │       ├── pain.png
 │       ├── disgust.png
 │       ├── fear.webp
@@ -28,16 +28,20 @@ Este proyecto implementa un **sistema de detección de emociones faciales en tie
 │   ├── emotions/             # CSV con imágenes de entrenamiento por emoción
 │   └── Prueba/               # CSV con imágenes de test por emoción
 │
-├── results/                      # Imágenes de test con nombre de emoción
+├── results/                  # Imágenes de test con nombre de emoción
 │   ├── pain.png
 │   ├── disgust.png
 │   ├── fear.png
 │   ├── happy.png
 │   └── matrix.png
 │
+├── img/                      # Imágenes para filtro
+│   ├── clown_nose.png        
+│   ├── clown_wih.png            
 ├── modelo_emociones.pth      # Modelo entrenado con ResNet18
-├── VC_P5.ipynb                  # Cuaderno con el desarrollo de la práctica
+├── VC_P5.ipynb               # Cuaderno con el desarrollo de la práctica
 ├── divide.py                 # Script para organizar los datos de kaggle
+├── filter.mp4                # Vídeo de muestra del filtro
 └── README.md
 ```
 
@@ -182,3 +186,86 @@ Las imágenes de `results/` se usan para mostrar cómo quedan los filtros aplica
 * La matriz de confusión permite identificar qué emociones se confunden más y evaluar el desempeño real del modelo.
 * Se mantiene la **detección de caras con Haar Cascade** porque Mediapipe puede fallar en ciertos ángulos de webcam y empeorar la detección de emociones.
 * Los PNGs se cargan con canal alpha para mantener transparencia.
+
+## Filtro
+
+Para esta parte de la práctica, se hace uso de `RetinaFace` sin el uso de `DeepFace` y los landmarks para hacer un filtro que coloca una peluca y una nariz de payaso en todas las caras que detecte. Incluso usando una GPU, el programa tarda considerablemente en procesar cada frame, pero con excelentes resultados.
+
+El filtro es capaz de escalar las imágenes en función del tamaño de la cara detectada (y por tanto, de la distancia a la cámara) y también de detectar los giros verticales de la cabeza para rotar las imágenes y su posición correctamente.
+
+Hace uso de la posición de los ojos y la nariz para ajustar automáticamente la escala, rotación y posición anteriormente mencionados.
+
+### 1. Identificación de la cara
+
+La detección de la cara se hace usando `RetinaFace.detect_faces(frame)` que devuelve un diccionario.
+
+```python
+id = 'face_' + str(idx)
+print(faces[id])
+facial_area = faces[id]['facial_area']
+landmarks = faces[id]['landmarks']
+```
+
+- Cada cara detectada se identifica mediante un ID (`face_0`, `face_1`, …).
+- `facial_area` contiene el bounding box de la cara `[x_min, y_min, x_max, y_max]`.
+- `landmarks` contiene las posiciones de los elementos faciales clave: ojos, nariz, boca, etc.
+
+### 2. Escalado de las imágenes
+
+```python
+  scale = (facial_area[2]-facial_area[0])/2000
+
+  nariz_scaled = cv2.resize(nariz, (int(nariz.shape[1] * scale), int(nariz.shape[0] * scale)), interpolation=cv2.INTER_AREA)
+
+  peluca_scaled = cv2.resize(peluca, (int(peluca.shape[1] * scale*2.5), int(peluca.shape[0] * scale*2.5)), interpolation=cv2.INTER_AREA)
+```
+
+- Se calcula una escala relativa al ancho de la cara para ajustar los accesorios proporcionalmente.
+- `nariz_scaled` y `peluca_scaled` son las imágenes ajustadas para encajar en la cara detectada.
+- Se usa la interpolación `INTER_AREA` para mantener la calidad al reducir el tamaño.
+
+### 3. Cálculo del ángulo de inclinación de los ojos 
+
+```python
+angle_rad = -(np.arctan2(landmarks["right_eye"][1]-landmarks["left_eye"][1], landmarks["right_eye"][0]-landmarks["left_eye"][0]))+np.pi
+angle = np.rad2deg(angle_rad)
+```
+
+- Se calcula el ángulo de la línea que une los ojos respecto a la horizontal.
+- Esto permite rotar la peluca y la nariz para que sigan la inclinación de la cabeza.
+- Se convierte a grados porque `cv2.getRotationMatrix2D` usado en la función `superponer_imagen` utiliza grados.
+
+### 4. Cálculo del centro de los ojos con offset para la peluca
+
+```python
+p1 = np.array([landmarks["right_eye"][0], landmarks["right_eye"][1]])
+p2 = np.array([landmarks["left_eye"][0], landmarks["left_eye"][1]])
+dist = int(-np.linalg.norm(p2 - p1))
+
+offset_y = dist*1.1
+offset_y = offset_y * np.cos(angle_rad)
+offset_x = offset_y * np.sin(angle_rad)
+
+eyes_center_x = ((int(landmarks["right_eye"][0])+int(landmarks["left_eye"][0]))/2)+offset_x
+eyes_center_y = ((int(landmarks["right_eye"][1])+int(landmarks["left_eye"][1]))/2)+offset_y
+```
+
+- `dist` mide la distancia entre los ojos (negativa para mover hacia arriba).
+- `offset_y` desplaza la peluca hacia arriba de los ojos, multiplicado por un factor `1.1` para que quede por encima de la frente.
+- `offset_x` y `offset_y` se rotan según el ángulo de la cabeza (angle_rad) para que el desplazamiento siga la inclinación de los ojos.
+- (`eyes_center_x`, `eyes_center_y`) es el centro final donde se colocará la peluca.
+
+### 5. Aplicación de filtro
+
+```python
+frame = superponer_imagen(frame, nariz_scaled, int(landmarks["nose"][0]), int(landmarks["nose"][1]), angle)
+frame = superponer_imagen(frame, peluca_scaled, eyes_center_x, eyes_center_y, angle)
+```
+
+- `superponer_imagen` coloca la imagen sobre el `frame`.
+- La nariz se coloca centrada en el landmark de la nariz.
+- La peluca se coloca centrada en `eyes_center`, usando el ángulo calculado para rotarla según la inclinación de la cabeza.
+- La función maneja transparencia, recorte automático y rotación.
+
+## Resultado
+
