@@ -154,12 +154,10 @@ disp.plot(cmap='Blues', values_format=".2f")
 
 Las imágenes de `results/` se usan para mostrar cómo quedan los filtros aplicados:
 
-| Emoción   | Imagen Original                 | Filtro Aplicado       |
-| --------- | ------------------------------- | --------------------- |
-| `pain`    | ![pain](results/pain.png)       | Cuernos rojos         |
-| `disgust` | ![disgust](results/disgust.png) | Corazones en mejillas |
-| `fear`    | ![fear](results/fear.png)       | Ojos duplicados       |
-| `happy`   | ![happy](results/happy.png)     | Nariz y bigotes       |
+| Emoción         | `pain`                    | `disgust`                       | `fear`                    | `happy`                     |
+| --------------- | ------------------------- | ------------------------------- | ------------------------- | --------------------------- |
+| Imagen Original | ![pain](results/pain.png) | ![disgust](results/disgust.png) | ![fear](results/fear.png) | ![happy](results/happy.png) |
+| Filtro Aplicado | Cuernos rojos             | Corazones en mejillas           | Ojos duplicados           | Nariz y bigotes             |
 
 * Los filtros con alpha se superponen respetando la transparencia.
 * En `fear`, el filtro se duplica para ambos ojos.
