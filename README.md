@@ -28,6 +28,13 @@ Este proyecto implementa un **sistema de detección de emociones faciales en tie
 │   ├── emotions/             # CSV con imágenes de entrenamiento por emoción
 │   └── Prueba/               # CSV con imágenes de test por emoción
 │
+├── results/                      # Imágenes de test con nombre de emoción
+│   ├── pain.png
+│   ├── disgust.png
+│   ├── fear.png
+│   ├── happy.png
+│   └── matrix.png
+│
 ├── modelo_emociones.pth      # Modelo entrenado con ResNet18
 ├── VC_P5.ipynb                  # Cuaderno con el desarrollo de la práctica
 ├── divide.py                 # Script para organizar los datos de kaggle
@@ -59,15 +66,27 @@ pip install opencv-python matplotlib pandas scikit-learn pillow numpy
 
 ## 2. Dataset
 
-Se utilizó el dataset de Kaggle: [Sentiment Images Classifier](https://www.kaggle.com/datasets/yousefmohamed20/sentiment-imagesclassifier).
+Se utilizó el dataset de Kaggle: [Sentiment Images Classifier](https://www.kaggle.com/datasets/yousefmohamed20/sentiment-images-classifier).
 
 ### Organización del dataset
 
 ```bash
 dataset/
-├── images/               # imágenes originales por emoción
-├── emotions/             # CSVs con rutas y etiquetas para entrenamiento
-└── Prueba/               # CSVs con rutas y etiquetas para test
+├──  anger/
+├── disgust/
+├──  fear/
+├── happy/
+├──  pain/
+└── sad/
+```
+
+Después de ejecutar el script:
+
+```bash
+├── data/
+│   ├── images/               # Todas las imágenes originales
+│   ├── emotions/             # CSV con imágenes de entrenamiento por emoción
+│   └── Prueba/               # CSV con imágenes de test por emoción
 ```
 
 > Los CSVs contienen dos columnas: `filename` (ruta de la imagen) y `label` (entidad numérica de la emoción).
@@ -84,6 +103,16 @@ dataset/
 * Optimización: `Adam`, función de pérdida `CrossEntropyLoss`.
 * Entrenamiento: 5 epochs, batch size 64.
 
+### Métricas por epoch
+
+| Epoch | Loss   | Accuracy |
+| ----- | ------ | -------- |
+| 1     | 1.0100 | 61.68%   |
+| 2     | 0.3572 | 86.35%   |
+| 3     | 0.1695 | 93.91%   |
+| 4     | 0.1324 | 96.22%   |
+| 5     | 0.0741 | 97.53%   |
+
 ```python
 # Ejemplo de modificación de la última capa
 model = models.resnet18(pretrained=True)
@@ -92,6 +121,9 @@ for layer in list(model.children())[:-3]:
         param.requires_grad = False
 model.fc = nn.Linear(model.fc.in_features, 4)
 ```
+
+> La red **no presentó overfitting** durante el entrenamiento: la precisión aumentó de manera constante y la pérdida disminuyó sin que los valores se estabilizaran prematuramente.
+> Accuracy en test: **73.38%**
 
 ---
 
@@ -109,6 +141,8 @@ disp = ConfusionMatrixDisplay(confusion_matrix=cm_percentage, display_labels=emo
 disp.plot(cmap='Blues', values_format=".2f")
 ```
 
+![matrix](results/matrix.png)    
+
 ---
 
 ## 5. Detección de Emociones en Tiempo Real
@@ -118,20 +152,35 @@ disp.plot(cmap='Blues', values_format=".2f")
 * **Predicción de emoción** mediante el modelo entrenado.
 * **Aplicación de filtros** PNG con transparencia:
 
-| Emoción   | Filtro aplicado      | Región en la cara  |
-| --------- | -------------------- | ------------------ |
-| `pain`    | cuernos rojos        | superior           |
-| `disgust` | corazones            | mejillas           |
-| `fear`    | ojos irritados       | ambos ojos         |
-| `happy`   | nariz y bigotes gato | zona media (nariz) |
+Las imágenes de `results/` se usan para mostrar cómo quedan los filtros aplicados:
+
+| Emoción   | Imagen Original                 | Filtro Aplicado       |
+| --------- | ------------------------------- | --------------------- |
+| `pain`    | ![pain](results/pain.png)       | Cuernos rojos         |
+| `disgust` | ![disgust](results/disgust.png) | Corazones en mejillas |
+| `fear`    | ![fear](results/fear.png)       | Ojos duplicados       |
+| `happy`   | ![happy](results/happy.png)     | Nariz y bigotes       |
 
 * Los filtros con alpha se superponen respetando la transparencia.
 * En `fear`, el filtro se duplica para ambos ojos.
 
 ---
 
+## 6. Detección en Tiempo Real
+
+* **Webcam** + **Haar Cascade**.
+* Transformación: 128x128 y normalización.
+* Predicción con ResNet18 entrenado.
+* Filtros PNG con transparencia aplicados según la emoción.
+* Para `fear`, la imagen se duplica en ambos ojos.
+
+---
+
 ## 6. Consideraciones
 
+* Haar Cascade mantiene robustez frente a ángulos complicados.
 * Se mantiene la **detección de caras con Haar Cascade** porque Mediapipe puede fallar en ciertos ángulos de webcam.
-* Los filtros están ajustados proporcionalmente a la cara detectada y posicionados para lucir natural.
+* El modelo no sobreentrenó, las epochs se ajustaron correctamente y se obtuvo un buen compromiso entre train y test accuracy.
+* La matriz de confusión permite identificar qué emociones se confunden más y evaluar el desempeño real del modelo.
+* Se mantiene la **detección de caras con Haar Cascade** porque Mediapipe puede fallar en ciertos ángulos de webcam y empeorar la detección de emociones.
 * Los PNGs se cargan con canal alpha para mantener transparencia.
